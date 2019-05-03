@@ -26,6 +26,11 @@ optparse = OptionParser.new do |opts|
     options[:logfile] = file
   end
 
+  options[:mailbox_dir] ||= nil
+  opts.on( '-m', '--mailbox DIR', 'Write received emails to files under "mailbox" directory' ) do |mailbox|
+    options[:mailbox_dir] = mailbox
+  end
+
   options[:smtp_port] ||= 25
   opts.on( '-s', '--smtp PORT', 'Specify SMTP port to use' ) do |port|
     options[:smtp_port] = port
@@ -72,8 +77,13 @@ $log = Logger.new(options[:logfile] || STDOUT)
 $log.level = options[:verbose] ? Logger::DEBUG : Logger::INFO
 $log.datetime_format = "%H:%M:%S"
 
+# if mailbox dir is configured, make sure its usable
+if options[:mailbox_dir]
+  File.writable? options[:mailbox_dir]
+end
+
 begin
-  smtp_server = Thread.new{ SMTPServer.new(options[:smtp_port]) }
+  smtp_server = Thread.new{ SMTPServer.new(options[:smtp_port], options[:mailbox_dir]) }
   pop_server  = Thread.new{ POPServer.new(options[:pop3_port]) }
 
   smtp_server.join
@@ -83,4 +93,3 @@ rescue Interrupt
 rescue Errno::EACCES
   $log.error "I need root access to open ports #{options[:smtp_port]} and / or #{options[:pop3_port]}. Please sudo #{__FILE__}"
 end
-

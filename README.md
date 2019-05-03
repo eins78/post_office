@@ -17,6 +17,7 @@ Usage
     
     -v, --verbose                    Output more information
     -l, --logfile FILE               Write log to FILE. Outputs to STDOUT (or /var/log/post_office.log when daemonized) by default.
+    -m, --mailbox DIR                Write received emails to files under "mailbox" directory
     -s, --smtp PORT                  Specify SMTP port to use
     -p, --pop3 PORT                  Specify POP3 port to use
     

@@ -7,8 +7,9 @@ class SMTPServer < GenericServer
   attr_accessor :client_data
 
   # Create new server listening on port 25
-  def initialize(port)
+  def initialize(port, mailbox_dir)
     self.client_data = Hash.new
+    @mailbox_dir = mailbox_dir
     super(:port => port)
   end
 
@@ -86,22 +87,13 @@ class SMTPServer < GenericServer
         get_client_data(client, :data).to_s
       )
       respond(client, 250)
-      store_mail_as_file(self.client_data[client.object_id])
+      if @mailbox_dir
+        store_mail_as_file(self.client_data[client.object_id])
+      end
       $log.info "Received mail from #{get_client_data(client, :from).to_s} with recipient #{get_client_data(client, :to).to_s}"
     else
       self.client_data[client.object_id][:data] << full_data
     end
-  end
-
-  def store_mail_as_file(data)
-    to = data[:to].to_s.gsub(/<|>/, '')
-    name = data[:data].split("\n")
-      .select {|l| l.to_s.start_with?('Message-ID:') }
-      .first.match(/<([^<]*)>/)[1]
-
-    dir = "./mailbox/#{to}"
-    FileUtils.mkdir_p(dir)
-    File.write("#{dir}/#{name}.txt", data[:data])
   end
 
   protected
@@ -120,6 +112,17 @@ class SMTPServer < GenericServer
   # Respond to client using a standard SMTP response code
   def respond(client, code)
     super(client, "#{code} #{SMTPServer::RESPONSES[code].to_s}\r\n")
+  end
+
+  # Store received mail as text file (if mailbox option is set)
+  def store_mail_as_file(mail)
+    receiver_addr = mail[:to].to_s.match(/<(.*)>/)[1]
+    message_id = mail[:data].split("\n").find {|l| l.to_s
+      .start_with?('Message-ID:') }.match(/<(.*)>/)[1]
+
+    dir_name = File.join(@mailbox_dir, receiver_addr)
+    Dir.exists?(dir_name) || Dir.mkdir(dir_name)
+    File.write(File.join(dir_name, "#{message_id}.eml.txt"), mail[:data])
   end
 
   # Standard SMTP response codes
