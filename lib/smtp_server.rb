@@ -5,18 +5,18 @@ require 'store.rb'
 
 class SMTPServer < GenericServer
   attr_accessor :client_data
-  
+
   # Create new server listening on port 25
   def initialize(port)
     self.client_data = Hash.new
     super(:port => port)
   end
-  
+
   # Send a greeting to client
   def greet(client)
     respond(client, 220)
   end
-  
+
   # Process command
   def process(client, command, full_data)
     case command
@@ -36,13 +36,13 @@ class SMTPServer < GenericServer
       end
     end
   end
-  
+
   # Closes connection
   def quit(client)
     respond(client, 221)
     client.close
   end
-  
+
   # Stores sender address
   def mail_from(client, full_data)
     if /^MAIL FROM:/ =~ full_data.upcase
@@ -52,7 +52,7 @@ class SMTPServer < GenericServer
       respond(client, 500)
     end
   end
-  
+
   # Stores recepient address
   def rcpt_to(client, full_data)
     if /^RCPT TO:/ =~ full_data.upcase
@@ -62,19 +62,19 @@ class SMTPServer < GenericServer
       respond(client, 500)
     end
   end
-  
+
   # Markes client sending data
   def data(client)
     set_client_data(client, :sending_data, true)
     set_client_data(client, :data, "")
     respond(client, 354)
   end
-  
+
   # Resets local client store
   def rset(client)
     self.client_data[client.object_id] = Hash.new
   end
-  
+
   # Adds full_data to incoming mail message
   #
   # We'll store the mail when full_data == "."
@@ -86,30 +86,42 @@ class SMTPServer < GenericServer
         get_client_data(client, :data).to_s
       )
       respond(client, 250)
+      store_mail_as_file(self.client_data[client.object_id])
       $log.info "Received mail from #{get_client_data(client, :from).to_s} with recipient #{get_client_data(client, :to).to_s}"
     else
       self.client_data[client.object_id][:data] << full_data
     end
   end
-  
+
+  def store_mail_as_file(data)
+    to = data[:to].to_s.gsub(/<|>/, '')
+    name = data[:data].split("\n")
+      .select {|l| l.to_s.start_with?('Message-ID:') }
+      .first.match(/<([^<]*)>/)[1]
+
+    dir = "./mailbox/#{to}"
+    FileUtils.mkdir_p(dir)
+    File.write("#{dir}/#{name}.txt", data[:data])
+  end
+
   protected
-  
+
   # Store key value combination for this client
   def set_client_data(client, key, value)
     self.client_data[client.object_id] = Hash.new unless self.client_data.include?(client.object_id)
     self.client_data[client.object_id][key] = value
   end
-  
+
   # Retreive key from local client store
   def get_client_data(client, key)
     self.client_data[client.object_id][key] if self.client_data.include?(client.object_id)
   end
-  
+
   # Respond to client using a standard SMTP response code
   def respond(client, code)
     super(client, "#{code} #{SMTPServer::RESPONSES[code].to_s}\r\n")
   end
-  
+
   # Standard SMTP response codes
   RESPONSES = {
     500 => "Syntax error, command unrecognized",
